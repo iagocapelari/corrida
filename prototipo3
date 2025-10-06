@@ -14,15 +14,10 @@ COR_BRANCO = (255, 255, 255)
 COR_PRETO = (0, 0, 0)
 COR_CINZA_ESCURO = (40, 40, 40)
 COR_NOTURNO_FUNDO = (15, 15, 30)
-COR_OURO = (255, 215, 0)
-COR_PRATA = (192, 192, 192)
-COR_VERDE = (0, 255, 0)
-COR_VERMELHO = (255, 0, 0)
 
 # Fontes
 FONT_MENU = pygame.font.Font(None, 36)
 FONT_PONTOS = pygame.font.Font(None, 28)
-FONT_PLACAR = pygame.font.Font(None, 48)
 
 
 # Enum para facilitar controles
@@ -32,8 +27,6 @@ class EstadoJogo(Enum):
     MENU_MODO = 3
     JOGANDO = 4
     SAIR = 5
-    PLACAR = 6
-    DIGITAR_NOME = 7
 
 
 class Dificuldade(Enum):
@@ -74,44 +67,25 @@ LISTA_MODIFICADORES = [
 ]
 
 # Carregamento das imagens dos carros
-try:
-    CARROS_IMGS = [
-        pygame.transform.scale(pygame.image.load("jogador1.png"), (40, 40)),
-        pygame.transform.scale(pygame.image.load("jogador2.png"), (40, 40)),
-        pygame.transform.scale(pygame.image.load("jogador3.png"), (40, 40)),
-    ]
-except:
-    # Fallback se as imagens não existirem
-    CARROS_IMGS = [pygame.Surface((40, 40)) for _ in range(3)]
-    for i, surface in enumerate(CARROS_IMGS):
-        surface.fill((i * 80, i * 80, i * 80))
+CARROS_IMGS = [
+    pygame.transform.scale(pygame.image.load("jogador1.png"), (40, 40)),
+    pygame.transform.scale(pygame.image.load("jogador2.png"), (40, 40)),
+    pygame.transform.scale(pygame.image.load("jogador3.png"), (40, 40)),
+]
 
 # Carregamento das imagens dos obstáculos (5 tipos)
-try:
-    OBSTACULOS_IMGS = [
-        pygame.transform.scale(pygame.image.load(f"obstaculo{i}.png"), (40, 40)) for i in range(1, 6)
-    ]
-except:
-    OBSTACULOS_IMGS = [pygame.Surface((40, 40)) for _ in range(5)]
-    for i, surface in enumerate(OBSTACULOS_IMGS):
-        surface.fill((255, i * 50, 0))
+OBSTACULOS_IMGS = [
+    pygame.transform.scale(pygame.image.load(f"obstaculo{i}.png"), (40, 40)) for i in range(1, 6)
+]
 
 # Carregamento das imagens dos modificadores
-try:
-    MODIFICADORES_IMGS = {
-        Modificador.VELOCIDADE: pygame.transform.scale(pygame.image.load("modificador1.png"), (40, 40)),
-        Modificador.INVULNERABILIDADE: pygame.transform.scale(pygame.image.load("modificador2.png"), (40, 40)),
-        Modificador.ESCUDO: pygame.transform.scale(pygame.image.load("modificador3.png"), (40, 40)),
-        Modificador.LENTIDAO: pygame.transform.scale(pygame.image.load("modificador4.png"), (40, 40)),
-        Modificador.MAIS_PONTOS: pygame.transform.scale(pygame.image.load("modificador5.png"), (40, 40)),
-    }
-except:
-    MODIFICADORES_IMGS = {}
-    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
-    for i, modificador in enumerate(LISTA_MODIFICADORES):
-        surface = pygame.Surface((40, 40))
-        surface.fill(colors[i])
-        MODIFICADORES_IMGS[modificador] = surface
+MODIFICADORES_IMGS = {
+    Modificador.VELOCIDADE: pygame.transform.scale(pygame.image.load("modificador1.png"), (40, 40)),
+    Modificador.INVULNERABILIDADE: pygame.transform.scale(pygame.image.load("modificador2.png"), (40, 40)),
+    Modificador.ESCUDO: pygame.transform.scale(pygame.image.load("modificador3.png"), (40, 40)),
+    Modificador.LENTIDAO: pygame.transform.scale(pygame.image.load("modificador4.png"), (40, 40)),
+    Modificador.MAIS_PONTOS: pygame.transform.scale(pygame.image.load("modificador5.png"), (40, 40)),
+}
 
 
 # Função para desenhar texto centralizado
@@ -123,109 +97,57 @@ def desenhar_texto_centralizado(superficie, texto, fonte, cor, y):
 
 # Classe Jogador
 class Jogador:
-    def __init__(self, x, y, imagem, controles, numero_jogador, nome):
+    def __init__(self, x, y, imagem, controles):
         self.rect = pygame.Rect(x, y, 40, 40)
         self.imagem = imagem
         self.controles = controles  # dicionário com teclas
-        self.numero_jogador = numero_jogador
-        self.nome = nome
         self.velocidade_base = 5
         self.velocidade_atual = self.velocidade_base
         self.pontuacao = 0
         self.invulneravel_tempo = 0
         self.tem_escudo = False
-        self.modificadores_ativos = []  # Lista para múltiplos modificadores
+        self.modificador_ativo = None
         self.vivo = True
-
-        # Variáveis para movimento fluido
-        self.velocidade_x = 0
-        self.velocidade_y = 0
-        self.aceleracao = 0.5
-        self.desaceleracao = 0.3
-        self.velocidade_max = 8
 
     def atualizar(self, dt, largura, altura, keys):
         if not self.vivo:
             return
 
-        # Calcula velocidade base com modificadores
-        base_vel = self.velocidade_base
-        velocidade_max_atual = self.velocidade_max
-
-        # Aplica modificadores de velocidade (só o mais forte prevalece)
-        if Modificador.VELOCIDADE in self.modificadores_ativos:
-            base_vel = self.velocidade_base * 1.5
-            velocidade_max_atual = self.velocidade_max * 1.5
-        elif Modificador.LENTIDAO in self.modificadores_ativos:
+        # Atualiza velocidade com modificadores e com tempo crescente
+        if self.modificador_ativo == Modificador.LENTIDAO:
             base_vel = self.velocidade_base * 0.75
-            velocidade_max_atual = self.velocidade_max * 0.75
+        elif self.modificador_ativo == Modificador.VELOCIDADE:
+            base_vel = self.velocidade_base * 1.5
+        else:
+            base_vel = self.velocidade_base
 
         self.velocidade_atual = base_vel
 
-        # Movimentação fluida com aceleração
-        # Horizontal
-        if keys[self.controles['esquerda']]:
-            self.velocidade_x = max(self.velocidade_x - self.aceleracao, -velocidade_max_atual)
-        elif keys[self.controles['direita']]:
-            self.velocidade_x = min(self.velocidade_x + self.aceleracao, velocidade_max_atual)
-        else:
-            # Desaceleração quando nenhuma tecla está pressionada
-            if self.velocidade_x > 0:
-                self.velocidade_x = max(0, self.velocidade_x - self.desaceleracao)
-            elif self.velocidade_x < 0:
-                self.velocidade_x = min(0, self.velocidade_x + self.desaceleracao)
-
-        # Vertical
-        if keys[self.controles['cima']]:
-            self.velocidade_y = max(self.velocidade_y - self.aceleracao, -velocidade_max_atual)
-        elif keys[self.controles['baixo']]:
-            self.velocidade_y = min(self.velocidade_y + self.aceleracao, velocidade_max_atual)
-        else:
-            # Desaceleração quando nenhuma tecla está pressionada
-            if self.velocidade_y > 0:
-                self.velocidade_y = max(0, self.velocidade_y - self.desaceleracao)
-            elif self.velocidade_y < 0:
-                self.velocidade_y = min(0, self.velocidade_y + self.desaceleracao)
-
-        # Aplica a velocidade à posição
-        self.rect.x += self.velocidade_x
-        self.rect.y += self.velocidade_y
-
-        # Limita o movimento dentro da tela
-        if self.rect.left < 0:
-            self.rect.left = 0
-            self.velocidade_x = 0
-        if self.rect.right > largura:
-            self.rect.right = largura
-            self.velocidade_x = 0
-        if self.rect.top < 0:
-            self.rect.top = 0
-            self.velocidade_y = 0
-        if self.rect.bottom > altura:
-            self.rect.bottom = altura
-            self.velocidade_y = 0
+        # Movimentação
+        if keys[self.controles['esquerda']] and self.rect.left > 0:
+            self.rect.x -= self.velocidade_atual
+        if keys[self.controles['direita']] and self.rect.right < largura:
+            self.rect.x += self.velocidade_atual
+        if keys[self.controles['cima']] and self.rect.top > 0:
+            self.rect.y -= self.velocidade_atual
+        if keys[self.controles['baixo']] and self.rect.bottom < altura:
+            self.rect.y += self.velocidade_atual
 
         # Atualiza tempo de invulnerabilidade
         if self.invulneravel_tempo > 0:
             self.invulneravel_tempo -= dt
             if self.invulneravel_tempo <= 0:
                 self.invulneravel_tempo = 0
-                # Remove invulnerabilidade dos modificadores ativos
-                if Modificador.INVULNERABILIDADE in self.modificadores_ativos:
-                    self.modificadores_ativos.remove(Modificador.INVULNERABILIDADE)
 
     def ativar_modificador(self, modificador):
-        # Adiciona à lista de modificadores ativos
-        if modificador not in self.modificadores_ativos:
-            self.modificadores_ativos.append(modificador)
-
+        self.modificador_ativo = modificador
         if modificador == Modificador.INVULNERABILIDADE:
             self.invulneravel_tempo = 3500  # milissegundos
         elif modificador == Modificador.ESCUDO:
             self.tem_escudo = True
         elif modificador == Modificador.MAIS_PONTOS:
-            # Pontuação extra equivalente a 15 segundos de jogo (15 * 60 = 900 pontos)
-            self.pontuacao += 900
+            # a pontuação extra será calculada no update do jogo
+            pass
 
     def desenhar(self, tela):
         if not self.vivo:
@@ -258,11 +180,11 @@ class Obstaculo:
 
 # Classe ModificadorObjeto (para modificadores que aparecem como obstáculos)
 class ModificadorObjeto:
-    def __init__(self, x, y, modificador, velocidade):
+    def __init__(self, x, y, modificador):
         self.rect = pygame.Rect(x, y, 40, 40)
         self.modificador = modificador
         self.imagem = MODIFICADORES_IMGS[modificador]
-        self.velocidade = velocidade  # Usa a mesma velocidade dos obstáculos
+        self.velocidade = 3
 
     def atualizar(self):
         self.rect.y += self.velocidade
@@ -279,10 +201,7 @@ class Jogo:
         self.tema = Tema.NORMAL
         self.modificadores_selecionados = []
         self.num_jogadores = 1
-        self.carro_selecionado_jogador1 = 0
-        self.carro_selecionado_jogador2 = 1  # Carro diferente para o jogador 2
-        self.nome_jogador1 = "Jogador 1"
-        self.nome_jogador2 = "Jogador 2"
+        self.carro_selecionado = 0
         self.tela = pygame.display.set_mode((LARGURA_BASE, ALTURA_BASE))
         pygame.display.set_caption("Jogo de Carros")
         self.clock = pygame.time.Clock()
@@ -317,63 +236,6 @@ class Jogo:
         self.modificadores_ativos = []  # Lista de modificadores selecionados (podem ser mais de um)
         self.modificadores_selecionados = []
 
-    def digitar_nome(self, jogador_num):
-        nome = ""
-        digitando = True
-        jogador_texto = f"Jogador {jogador_num}"
-
-        while digitando:
-            self.tela.fill(COR_CINZA_ESCURO if self.tema == Tema.NORMAL else COR_NOTURNO_FUNDO)
-
-            # Título
-            desenhar_texto_centralizado(self.tela, f"DIGITE O NOME DO {jogador_texto.upper()}", FONT_MENU, COR_BRANCO,
-                                        100)
-
-            # Campo de texto
-            pygame.draw.rect(self.tela, COR_PRETO, (50, 200, self.tela.get_width() - 100, 50))
-            pygame.draw.rect(self.tela, COR_BRANCO, (50, 200, self.tela.get_width() - 100, 50), 2)
-
-            # Texto digitado
-            texto_render = FONT_MENU.render(nome if nome else "Digite seu nome...", True, COR_BRANCO)
-            self.tela.blit(texto_render, (70, 210))
-
-            # Cursor piscante
-            if pygame.time.get_ticks() % 1000 < 500:
-                cursor_x = 70 + texto_render.get_width()
-                pygame.draw.line(self.tela, COR_BRANCO, (cursor_x, 210), (cursor_x, 240), 2)
-
-            # Instruções
-            desenhar_texto_centralizado(self.tela, "ENTER para confirmar", FONT_PONTOS, COR_VERDE, 300)
-            desenhar_texto_centralizado(self.tela, "ESC para cancelar", FONT_PONTOS, COR_BRANCO, 330)
-            desenhar_texto_centralizado(self.tela, "BACKSPACE para apagar", FONT_PONTOS, COR_BRANCO, 360)
-
-            pygame.display.flip()
-
-            for evento in pygame.event.get():
-                if evento.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                elif evento.type == pygame.KEYDOWN:
-                    if evento.key == pygame.K_RETURN:
-                        if nome.strip():  # Só confirma se não estiver vazio
-                            if jogador_num == 1:
-                                self.nome_jogador1 = nome
-                            else:
-                                self.nome_jogador2 = nome
-                            digitando = False
-                    elif evento.key == pygame.K_ESCAPE:
-                        digitando = False
-                    elif evento.key == pygame.K_BACKSPACE:
-                        nome = nome[:-1]
-                    else:
-                        # Adiciona caractere se não for muito longo
-                        if len(nome) < 15 and evento.unicode.isprintable():
-                            nome += evento.unicode
-
-            self.clock.tick(FPS)
-
-        return nome if nome.strip() else jogador_texto
-
     def resetar_jogo(self):
         # Cria jogadores e limpa obstáculos
         self.obstaculos = []
@@ -403,8 +265,8 @@ class Jogo:
             "esquerda": pygame.K_LEFT,
             "direita": pygame.K_RIGHT,
         }
-        jogador1 = Jogador(180 + (largura_tela - LARGURA_BASE), 500, CARROS_IMGS[self.carro_selecionado_jogador1],
-                           controles_jogador1, 1, self.nome_jogador1)
+        jogador1 = Jogador(180 + (largura_tela - LARGURA_BASE), 500, CARROS_IMGS[self.carro_selecionado],
+                           controles_jogador1)
         self.jogadores.append(jogador1)
 
         # Jogador 2 (esquerda), se houver
@@ -415,15 +277,11 @@ class Jogo:
                 "esquerda": pygame.K_a,
                 "direita": pygame.K_d,
             }
-            jogador2 = Jogador(180, 500, CARROS_IMGS[self.carro_selecionado_jogador2], controles_jogador2, 2,
-                               self.nome_jogador2)
+            jogador2 = Jogador(180, 500, CARROS_IMGS[1], controles_jogador2)  # Jogador 2 sempre carro 2 por enquanto
             self.jogadores.insert(0, jogador2)  # fica na esquerda
 
         # Reset modificadores
-        for jogador in self.jogadores:
-            jogador.modificadores_ativos = []
-            jogador.tem_escudo = False
-            jogador.invulneravel_tempo = 0
+        self.modificadores_ativos = []
 
     def criar_obstaculo(self):
         largura_tela = self.tela.get_width()
@@ -432,7 +290,7 @@ class Jogo:
         # 10% de chance de ser um modificador (2% para cada um dos 5 tipos)
         if random.random() < 0.1 and self.modificadores_selecionados:
             modificador = random.choice(self.modificadores_selecionados)
-            return ModificadorObjeto(x, -40, modificador, self.velocidade_base_obstaculo)
+            return ModificadorObjeto(x, -40, modificador)
         else:
             img = random.choice(OBSTACULOS_IMGS)
             velocidade = self.velocidade_base_obstaculo
@@ -444,10 +302,14 @@ class Jogo:
 
         # Aplica um modificador aleatório em um jogador aleatório
         modificador = random.choice(self.modificadores_selecionados)
-        jogadores_vivos = [j for j in self.jogadores if j.vivo]
-        if jogadores_vivos:
-            jogador = random.choice(jogadores_vivos)
+        jogador = random.choice([j for j in self.jogadores if j.vivo])
+        if jogador:
             jogador.ativar_modificador(modificador)
+
+            # Se for MAIS_PONTOS, já aplica a pontuação extra
+            if modificador == Modificador.MAIS_PONTOS:
+                # 30 segundos de jogo * 10 pontos por segundo = 300 pontos
+                jogador.pontuacao += 300
 
     def aumentar_velocidade_jogadores(self, tempo_jogo):
         # Aumenta velocidade gradualmente, até +100% em 5 minutos
@@ -455,88 +317,9 @@ class Jogo:
         for jogador in self.jogadores:
             if jogador.vivo:
                 jogador.velocidade_base = 5 * (1 + fator)
-                jogador.velocidade_max = 8 * (1 + fator)
 
         # Também aumenta velocidade dos obstáculos proporcionalmente
         self.velocidade_base_obstaculo = CONFIG_DIFICULDADE[self.dificuldade]["velocidade_base"] * (1 + fator)
-
-    def mostrar_placar(self):
-        # Ordena jogadores por pontuação (do maior para o menor)
-        jogadores_ordenados = sorted(self.jogadores, key=lambda j: j.pontuacao, reverse=True)
-
-        self.estado = EstadoJogo.PLACAR
-        esperando_input = True
-
-        while esperando_input:
-            self.tela.fill(COR_CINZA_ESCURO if self.tema == Tema.NORMAL else COR_NOTURNO_FUNDO)
-
-            # Título
-            desenhar_texto_centralizado(self.tela, "PLACAR FINAL", FONT_PLACAR, COR_BRANCO, 80)
-
-            # Primeiro lugar
-            if len(jogadores_ordenados) > 0:
-                desenhar_texto_centralizado(self.tela, "🥇 1º LUGAR", FONT_MENU, COR_OURO, 160)
-                desenhar_texto_centralizado(self.tela, f"{jogadores_ordenados[0].nome}", FONT_MENU, COR_BRANCO, 200)
-                desenhar_texto_centralizado(self.tela, f"Pontuação: {jogadores_ordenados[0].pontuacao}", FONT_MENU,
-                                            COR_BRANCO, 240)
-
-                # Desenha o carro do vencedor
-                img_vencedor = pygame.transform.scale(jogadores_ordenados[0].imagem, (80, 80))
-                rect_img = img_vencedor.get_rect(center=(self.tela.get_width() // 2, 300))
-                self.tela.blit(img_vencedor, rect_img)
-
-            # Segundo lugar (apenas se tiver 2 jogadores)
-            if len(jogadores_ordenados) > 1:
-                desenhar_texto_centralizado(self.tela, "🥈 2º LUGAR", FONT_MENU, COR_PRATA, 400)
-                desenhar_texto_centralizado(self.tela, f"{jogadores_ordenados[1].nome}", FONT_MENU, COR_BRANCO, 440)
-                desenhar_texto_centralizado(self.tela, f"Pontuação: {jogadores_ordenados[1].pontuacao}", FONT_MENU,
-                                            COR_BRANCO, 480)
-
-            # Instrução para continuar
-            desenhar_texto_centralizado(self.tela, "Pressione ESPAÇO para voltar ao menu", FONT_PONTOS, COR_BRANCO, 550)
-
-            pygame.display.flip()
-
-            for evento in pygame.event.get():
-                if evento.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                elif evento.type == pygame.KEYDOWN:
-                    if evento.key == pygame.K_SPACE or evento.key == pygame.K_RETURN or evento.key == pygame.K_ESCAPE:
-                        esperando_input = False
-                        self.estado = EstadoJogo.MENU_PRINCIPAL
-
-            self.clock.tick(FPS)
-
-    def verificar_colisao_jogadores(self):
-        """Verifica colisão entre jogadores no modo 2 players"""
-        if self.num_jogadores == 2 and len(self.jogadores) == 2:
-            jogador1, jogador2 = self.jogadores
-
-            # Verifica se ambos estão vivos e colidindo
-            if jogador1.vivo and jogador2.vivo and jogador1.rect.colliderect(jogador2.rect):
-                # Verifica se algum jogador tem invulnerabilidade
-                jogador1_invulneravel = Modificador.INVULNERABILIDADE in jogador1.modificadores_ativos
-                jogador2_invulneravel = Modificador.INVULNERABILIDADE in jogador2.modificadores_ativos
-
-                # Se ambos têm invulnerabilidade, nada acontece
-                if jogador1_invulneravel and jogador2_invulneravel:
-                    return
-
-                # Se apenas um tem invulnerabilidade, o outro morre
-                elif jogador1_invulneravel and not jogador2_invulneravel:
-                    jogador2.vivo = False
-                elif jogador2_invulneravel and not jogador1_invulneravel:
-                    jogador1.vivo = False
-
-                # Se nenhum tem invulnerabilidade, ambos morrem
-                else:
-                    jogador1.vivo = False
-                    jogador2.vivo = False
-
-                # Se pelo menos um jogador morreu, mostra o placar
-                if not jogador1.vivo or not jogador2.vivo:
-                    self.mostrar_placar()
 
     def atualizar(self, dt):
         keys = pygame.key.get_pressed()
@@ -548,12 +331,6 @@ class Jogo:
             self.atualizar_menu_modo(keys)
         elif self.estado == EstadoJogo.JOGANDO:
             self.atualizar_jogo(dt, keys)
-        elif self.estado == EstadoJogo.PLACAR:
-            # A tela de placar é controlada pelo método mostrar_placar
-            pass
-        elif self.estado == EstadoJogo.DIGITAR_NOME:
-            # A digitação de nome é controlada pelo método digitar_nome
-            pass
 
     def atualizar_menu_principal(self, keys):
         for evento in pygame.event.get():
@@ -569,15 +346,10 @@ class Jogo:
                     opcao = self.menu_opcoes[self.menu_selecionado]
                     if opcao == "Jogar 1 Player":
                         self.num_jogadores = 1
-                        # Pede nome do jogador 1
-                        self.digitar_nome(1)
                         self.resetar_jogo()
                         self.estado = EstadoJogo.JOGANDO
                     elif opcao == "Jogar 2 Players":
                         self.num_jogadores = 2
-                        # Pede nome dos dois jogadores
-                        self.digitar_nome(1)
-                        self.digitar_nome(2)
                         self.resetar_jogo()
                         self.estado = EstadoJogo.JOGANDO
                     elif opcao == "Dificuldade":
@@ -619,10 +391,7 @@ class Jogo:
                 elif evento.key == pygame.K_RETURN:
                     opcao = self.menu_modo_opcoes[self.menu_modo_selecionado]
                     if opcao == "Escolher Carro":
-                        if self.num_jogadores == 2:
-                            self.menu_chooser_carro_2players()
-                        else:
-                            self.menu_chooser_carro(1)
+                        self.menu_chooser_carro()
                     elif opcao == "Tema":
                         self.menu_chooser_tema()
                     elif opcao == "Modificadores":
@@ -632,14 +401,12 @@ class Jogo:
                 elif evento.key == pygame.K_ESCAPE:
                     self.estado = EstadoJogo.MENU_PRINCIPAL
 
-    def menu_chooser_carro(self, jogador_num):
-        selecionado = self.carro_selecionado_jogador1 if jogador_num == 1 else self.carro_selecionado_jogador2
+    def menu_chooser_carro(self):
+        selecionado = self.carro_selecionado
         rodando = True
         while rodando:
             self.tela.fill(COR_CINZA_ESCURO if self.tema == Tema.NORMAL else COR_NOTURNO_FUNDO)
-            nome_jogador = self.nome_jogador1 if jogador_num == 1 else self.nome_jogador2
-            desenhar_texto_centralizado(self.tela,
-                                        f"Escolha carro {nome_jogador} (← → para mudar, Enter para confirmar)",
+            desenhar_texto_centralizado(self.tela, "Escolha seu carro (← → para mudar, Enter para confirmar)",
                                         FONT_MENU, COR_BRANCO, 100)
             img = CARROS_IMGS[selecionado]
             rect_img = img.get_rect(center=(self.tela.get_width() // 2, self.tela.get_height() // 2))
@@ -656,20 +423,11 @@ class Jogo:
                     elif evento.key == pygame.K_RIGHT:
                         selecionado = (selecionado + 1) % len(CARROS_IMGS)
                     elif evento.key == pygame.K_RETURN:
-                        if jogador_num == 1:
-                            self.carro_selecionado_jogador1 = selecionado
-                        else:
-                            self.carro_selecionado_jogador2 = selecionado
+                        self.carro_selecionado = selecionado
                         rodando = False
                     elif evento.key == pygame.K_ESCAPE:
                         rodando = False
             self.clock.tick(FPS)
-
-    def menu_chooser_carro_2players(self):
-        # Primeiro jogador escolhe
-        self.menu_chooser_carro(1)
-        # Segundo jogador escolhe
-        self.menu_chooser_carro(2)
 
     def menu_chooser_tema(self):
         selecionado = self.tema_atual
@@ -692,8 +450,6 @@ class Jogo:
                     pygame.quit()
                     sys.exit()
                 elif evento.type == pygame.KEYDOWN:
-                    if evento.key == pygame.K_LEFT:
-                        selecionado = (selecionado - 1) % len(opcoes_tema)
                     if evento.key == pygame.K_LEFT:
                         selecionado = (selecionado - 1) % len(opcoes_tema)
                     elif evento.key == pygame.K_RIGHT:
@@ -823,34 +579,28 @@ class Jogo:
             if modificador_obj.rect.y > self.tela.get_height():
                 self.modificadores_objetos.remove(modificador_obj)
 
-        # Verifica colisões entre jogadores
-        self.verificar_colisao_jogadores()
+        # Verifica colisões entre jogadores (apenas no modo 2 players)
+        if self.num_jogadores == 2:
+            jogador1, jogador2 = self.jogadores
+            if jogador1.vivo and jogador2.vivo and jogador1.rect.colliderect(jogador2.rect):
+                # Ambos os jogadores morrem ao colidirem
+                jogador1.vivo = False
+                jogador2.vivo = False
 
         # Verifica colisões com obstáculos
         for jogador in self.jogadores:
-            if not jogador.vivo:
-                continue
-
-            # Jogador está protegido se tiver invulnerabilidade
-            if Modificador.INVULNERABILIDADE in jogador.modificadores_ativos:
+            if not jogador.vivo or jogador.invulneravel_tempo > 0:
                 continue
 
             for obstaculo in self.obstaculos[:]:
                 if jogador.rect.colliderect(obstaculo.rect):
                     if jogador.tem_escudo:
                         jogador.tem_escudo = False
-                        # Remove escudo dos modificadores ativos
-                        if Modificador.ESCUDO in jogador.modificadores_ativos:
-                            jogador.modificadores_ativos.remove(Modificador.ESCUDO)
                         self.obstaculos.remove(obstaculo)
                     else:
                         jogador.vivo = False
-                        # Se for modo 2 players e ambos morreram, mostra placar
-                        if self.num_jogadores == 2 and all(not j.vivo for j in self.jogadores):
-                            self.mostrar_placar()
-                            return
-                        # Se for modo 1 player, volta ao menu
-                        elif self.num_jogadores == 1:
+                        # Se for modo 1 player ou ambos morreram, volta ao menu
+                        if self.num_jogadores == 1 or all(not j.vivo for j in self.jogadores):
                             self.estado = EstadoJogo.MENU_PRINCIPAL
                             return
 
@@ -863,10 +613,6 @@ class Jogo:
                 if jogador.rect.colliderect(modificador_obj.rect):
                     jogador.ativar_modificador(modificador_obj.modificador)
                     self.modificadores_objetos.remove(modificador_obj)
-
-        # Verifica se todos os jogadores morreram (modo 2 players)
-        if self.num_jogadores == 2 and all(not j.vivo for j in self.jogadores):
-            self.mostrar_placar()
 
     def desenhar(self):
         # Define a cor de fundo baseada no tema
@@ -889,22 +635,13 @@ class Jogo:
         pygame.display.flip()
 
     def desenhar_menu_principal(self):
-        # FUNDO DO MENU - Forçando o tamanho
-        try:
-            fundo_img = pygame.image.load("transitofreneticologo.png")
-            # Sempre redimensiona para 400x600 (1 player) ou 800x600 (2 players)
-            largura = 400 if self.num_jogadores == 1 else 800
-            fundo_img = pygame.transform.scale(fundo_img, (largura, 600))
-            self.tela.blit(fundo_img, (0, 0))
-        except:
-            self.tela.fill(COR_CINZA_ESCURO)
+        desenhar_texto_centralizado(self.tela, "Jogo de Carros", FONT_MENU, COR_BRANCO, 100)
 
-        # O resto do menu continua igual...
         for i, opcao in enumerate(self.menu_opcoes):
             cor = COR_BRANCO
             if i == self.menu_selecionado:
                 cor = (255, 255, 0)  # Amarelo para o selecionado
-            desenhar_texto_centralizado(self.tela, opcao, FONT_MENU, cor, 250 + i * 50)
+            desenhar_texto_centralizado(self.tela, opcao, FONT_MENU, cor, 200 + i * 50)
 
     def desenhar_menu_dificuldade(self):
         desenhar_texto_centralizado(self.tela, "Selecione a Dificuldade", FONT_MENU, COR_BRANCO, 100)
@@ -925,23 +662,6 @@ class Jogo:
             desenhar_texto_centralizado(self.tela, opcao, FONT_MENU, cor, 200 + i * 50)
 
     def desenhar_jogo(self):
-        # === IMAGEM DE FUNDO DO JOGO ===
-        try:
-            # Tenta carregar a imagem de fundo
-            fundo_img = pygame.image.load("imagemdefundo.png")
-            # Redimensiona para caber na tela
-            fundo_img = pygame.transform.scale(fundo_img, (self.tela.get_width(), self.tela.get_height()))
-            # Desenha a imagem de fundo
-            self.tela.blit(fundo_img, (0, 0))
-        except:
-            # Se não conseguir carregar a imagem, usa a cor de fundo normal
-            if self.tema == Tema.NORMAL:
-                self.cor_fundo = COR_CINZA_ESCURO
-            else:
-                self.cor_fundo = COR_NOTURNO_FUNDO
-            self.tela.fill(self.cor_fundo)
-        # ================================
-
         # Desenha obstáculos
         for obstaculo in self.obstaculos:
             obstaculo.desenhar(self.tela)
@@ -956,7 +676,7 @@ class Jogo:
 
         # Desenha pontuação
         for i, jogador in enumerate(self.jogadores):
-            texto_pontos = f"{jogador.nome}: {jogador.pontuacao}"
+            texto_pontos = f"Jogador {i + 1}: {jogador.pontuacao}"
             if not jogador.vivo:
                 texto_pontos += " (MORTO)"
             render_pontos = FONT_PONTOS.render(texto_pontos, True, COR_BRANCO)
@@ -971,12 +691,6 @@ class Jogo:
         texto_tempo = f"Tempo: {minutos:02d}:{segundos:02d}"
         render_tempo = FONT_PONTOS.render(texto_tempo, True, COR_BRANCO)
         self.tela.blit(render_tempo, (self.tela.get_width() // 2 - render_tempo.get_width() // 2, 10))
-
-        # Aviso de colisão entre jogadores (modo 2 players)
-        if self.num_jogadores == 2:
-            texto_colisao = "CUIDADO: Colisão entre jogadores termina o jogo!"
-            render_colisao = FONT_PONTOS.render(texto_colisao, True, COR_VERMELHO)
-            self.tela.blit(render_colisao, (self.tela.get_width() // 2 - render_colisao.get_width() // 2, 50))
 
     def executar(self):
         while True:
